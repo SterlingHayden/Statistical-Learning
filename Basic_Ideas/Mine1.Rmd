@@ -1,0 +1,229 @@
+#CP, AIC, BIC, Adj R^2
+
+#Cp on advertising data,    The lower the CP the better the model
+```{r}
+data1 = read.csv("Advertising.csv", 
+	header=TRUE, stringsAsFactors = FALSE, sep=",", row.names=1)
+n = nrow(data1)
+p = 3
+
+
+ols.fit1 = lm(sales~., data1)
+d = 3
+summary(ols.fit1)
+
+sigma0 = summary(ols.fit1)$sigma
+RSS = sigma0 * (n-p-1)
+RSS=  sigma0 * summary(ols.fit1)$df[2]
+Cp.1 = 1/n * (RSS + 2*d*sigma0^2)
+
+ols.fit2 = lm(sales~TV, data1)
+d = 1
+sigma = summary(ols.fit2)$sigma
+RSS = sigma * summary(ols.fit2)$df[2]
+Cp.2 = 1/n * (RSS + 2*d*sigma0^2)
+
+ols.fit3 = lm(sales~TV+radio, data1)
+d = 2
+sigma = summary(ols.fit3)$sigma
+RSS = sigma * summary(ols.fit3)$df[2]
+Cp.3 = 1/n * (RSS + 2*d*sigma0^2)
+
+ols.fit4 = lm(sales~newspaper, data1)
+d = 1
+sigma = summary(ols.fit4)$sigma
+RSS = sigma * summary(ols.fit4)$df[2]
+Cp.4 = 1/n * (RSS + 2*d*sigma0^2)
+
+print(c(Cp.1,Cp.2,Cp.3, Cp.4))
+```
+
+# Cp calculation (for Income data),   The lower the CP the better the model
+```{r}
+# Load data (Income2 data)
+data2 = read.csv("Income2.csv", 
+	header=TRUE, stringsAsFactors = FALSE, row.names=1)
+n = nrow(data2)
+p = 2
+
+ols.fit2 = lm(Income~., data2)
+d = 2
+sigma0 = summary(ols.fit2)$sigma
+RSS = sigma0 * summary(ols.fit2)$df[2]
+Cp.1 = 1/n * (RSS + 2*d*sigma0^2)
+
+ols.fit2 = lm(Income~Education, data2)
+d = 1
+sigma = summary(ols.fit2)$sigma
+RSS = sigma * summary(ols.fit2)$df[2]
+Cp.2 = 1/n * (RSS + 2*d*sigma0^2)
+
+ols.fit2 = lm(Income~Seniority, data2)
+d = 1
+sigma = summary(ols.fit2)$sigma
+RSS = sigma * summary(ols.fit2)$df[2]
+Cp.3 = 1/n * (RSS + 2*d*sigma0^2)
+
+print(c(Cp.1,Cp.2,Cp.3))
+```
+
+# AIC calculation,       smaller AIC = better model
+```{r}
+# Load data (Advertising data)
+data1 = read.csv("Advertising.csv", 
+	header=TRUE, stringsAsFactors = FALSE, sep=",", row.names=1)
+n = nrow(data1)
+p = 3
+
+ols.fit1 = lm(sales~., data1)
+d = 3
+sigma0 = summary(ols.fit1)$sigma
+RSS = sigma0 * summary(ols.fit1)$df[2]
+Cp.1 = 1/n * (RSS + 2*d*sigma0^2)
+AIC.1 = Cp.1/sigma0^2
+
+ols.fit2 = lm(sales~TV, data1)
+d = 1
+sigma = summary(ols.fit2)$sigma
+RSS = sigma * summary(ols.fit2)$df[2]
+Cp.2 = 1/n * (RSS + 2*d*sigma0^2)
+AIC.2 = Cp.2/sigma0^2
+
+ols.fit3 = lm(sales~TV+radio, data1)
+d = 2
+sigma = summary(ols.fit3)$sigma
+RSS = sigma * summary(ols.fit3)$df[2]
+Cp.3 = 1/n * (RSS + 2*d*sigma0^2)
+AIC.3 = Cp.3/sigma0^2
+
+print(c(AIC.1,AIC.2,AIC.3))
+```
+
+# Best Subset Selection for a simulated data, using adj R^2
+```{r}
+set.seed(1)
+x1 =  rnorm(100,0,1) #simulate x1
+x2 = rnorm(100,0,1) #simulate x2
+x3 = rnorm(100,0,1) #simulate x3
+x4 = rnorm(100,0,1) #simulate x4
+e = rnorm(100,0,0.4) #simulate noise
+y = 1*x1 + 2*x2 + e #simulate y; note that, x3 and x4 are irrelevant, and we hope the best subset selection can identify the important variables
+data.x = data.frame( cbind(x1, x2, x3, x4) )
+
+
+p = 4  # number of candidate covariates
+
+for (d in 1:p){ 
+  combination = t(combn(p, d))
+  m = nrow( combination )
+  for (j in 1:m){
+    data.cut = data.x[, combination[j,]]
+    data.0 = data.frame(  cbind(y, data.cut) )
+    fit =  lm(y~., data.0)
+    adj.R2 = summary(fit)$adj.r.squared
+    print(c(adj.R2, combination[j,]))
+  }
+}
+```
+For above, it looks like selecting just x[1] and x[2] results in the best adj R^2.
+
+
+# Best Subset Selection for Prostate Cancer Data
+```{r}
+# Load data
+#library(lasso2) # we need a dataset called, "Prostate", from this package lasso2
+#data(Prostate)
+#head(Prostate)
+#data = load("Prostate.RData")
+load("Prostate.RData")
+data <- Prostate
+head(data)
+
+p = 8
+n = nrow(data)
+model.list = list()
+adj.R2 = array()
+
+jj = 1
+for (d in 1:p){
+  combination = combn(p,d)
+  n.com = ncol(combination)
+  for (j in 1:n.com){
+    data.cut = data[, c(combination[,j], 9)]
+    fit = lm(lpsa~., data.cut)
+    model.list[[jj]] = fit
+    adj.R2[jj] = summary(fit)$adj.r.squared
+    jj = jj + 1
+  }
+}
+plot(adj.R2, type="h")
+
+opt = which(adj.R2 == max(adj.R2))
+summary(model.list[[opt]])
+
+case = which(adj.R2 >= 0.6)
+n.f = array()
+ii = 1
+for (i in case){
+  n.f[ii] = summary(model.list[[i]])$df[1]-1
+  ii = ii + 1
+}
+plot(case, n.f, type="h")
+
+which(n.f == 3)
+summary(model.list[[case[1]]])
+summary(model.list[[case[2]]])
+```
+
+# variable selection using stepAIC
+# Select a formula-based model by AIC.
+```{r}
+library(MASS)
+fit.all = lm(lpsa~.,data)
+fit.null = lm(lpsa~1, data)
+
+stepAIC(fit.null, direction="forward", 
+		scope=list(lower=fit.null,upper=fit.all))
+
+stepAIC(fit.all, direction="backward")
+
+stepAIC(fit.all, direction=c("both"),
+		scope=list(lower=fit.null,upper=fit.all))
+```
+
+# variable selection using regsubsets
+```{r}
+library(leaps)
+
+fit <- regsubsets(lpsa~., nbest=1, data=data, method="backward")
+summary(fit)
+plot(fit, scale="bic")
+plot(fit, scale="adjr2")
+plot(fit, scale="Cp")
+
+fit <- regsubsets(lpsa~., nbest=1, data=data, method="forward")
+plot(fit, scale="bic")
+plot(fit, scale="adjr2")
+plot(fit, scale="Cp")
+
+fit <- regsubsets(lpsa~., nbest=1, data=data, method="seqrep")
+plot(fit, scale="bic")
+plot(fit, scale="adjr2")
+plot(fit, scale="Cp")
+```
+First Frame: shows us what features to select by how many features total are in our model. Other frames show scores for each feature selections.
+
+
+# Relative importance
+```{r}
+library(relaimpo)
+fit.aic.best = lm(lpsa~lcavol+lweight+age+lbph+svi,data )
+calc.relimp(fit.aic.best,type="lmg",data=data,rela=TRUE)
+
+# Bootstrap Measures of Relative Importance (100 samples) 
+boot <- boot.relimp(fit.aic.best, b = 100, type = "lmg", rank = TRUE, rela = FALSE)
+plot(booteval.relimp(boot,sort=TRUE)) # plot result
+```
+1st frame tells up proportion of variance explained by the model and each features relative importance. 
+Among the proprtion of varriance explained by the model = 64.4%, 57.54% is explained by “lcavol”
+
