@@ -1,0 +1,84 @@
+# Lasso Regression
+
+# Data Loading
+```{r}
+load("Prostate.RData")
+data <- Prostate
+head(data)
+```
+
+# Data Scaling
+# Lasso Solutions are NOT equivariant under scaling of the inputs; 
+# So, one normally standardizes the inputs before implementing the ridge regression
+```{r}
+data2 = data
+for (i in 1:8){
+  data2[,i] = (data2[,i] - mean(data2[,i]))/sqrt(var(data2[,i]))
+}
+```
+
+# Lasso using glmnet library, STANDARDIZATION IS NOT UNDER OUR CONTROL
+```{r}
+library(glmnet)
+X.mat = as.matrix(data2[,1:8])
+y.mat = as.vector(data2$lpsa)
+fit.glmnet = glmnet(x=X.mat, y=y.mat, lambda = seq(0,4,0.1), 
+		alpha=1)
+plot(fit.glmnet, label = FALSE, xvar="lambda")
+
+cv.out = cv.glmnet(x=X.mat, y=y.mat, nfolds=4)
+plot(cv.out)
+cv.out$lambda.min  # lambda selection using cross-validation
+```
+
+# Lasso using user-defined code:
+```{r}
+one.col = array(1, dim=c(nrow(data2), 1))
+X.mat = data2[,c(1:8)]
+X.mat = cbind(one.col, X.mat)
+X.mat = as.matrix(X.mat)
+y.mat = as.vector(data2[,9])
+
+obj = function(par, X.in, y.in, lambda.in){
+  par = as.vector(par)
+  RSS = sum( (y.in - (X.in%*%par))^2, na.rm=TRUE)
+  penalty = lambda.in * sum(abs(par), na.rm=TRUE)
+  RSS.p = RSS + penalty
+  return(RSS.p)
+}
+My.lasso = function(X, y, lambda){
+  par0 = array(0, dim=c(9,1))
+  fit.lasso=optim(par=par0, obj, X.in=X, 
+			y.in=y, lambda.in=lambda, 
+			method = c("BFGS"),control = list(abstol=1e-5))
+  output = data.frame(fit.lasso$par)
+  output$variable = colnames(X)
+  output$lambda = lambda
+  return(output)
+}
+
+My.lasso(X=X.mat, y=y.mat, lambda=5)
+```
+Prams for lasso reg.
+
+# See how solutions change over lambda, the larger lambda the less important features go to 0 faster than the important features(less important are sacrificed). Lasso lets features go to ZERO unlike Ridge.
+```{r}
+lambda.seq = seq(0.1,50,1)
+output = list()
+for (i in c(1:length(lambda.seq))){
+  output[[i]] = My.lasso(X=X.mat,y=y.mat,lambda=lambda.seq[i])
+}
+output = do.call(rbind,output)
+output = output[output$variable!="one.col",]
+require(ggplot2)
+ggplot(output, aes(lambda,fit.lasso.par)) + geom_line(aes(colour = variable))
+```
+
+# if we compare the Lasso results to the best subset selection using BIC:
+```{r}
+library(leaps)
+fit <- regsubsets(lpsa~., nbest=1,data=data, method="backward")
+summary(fit)
+plot(fit, scale="bic")
+```
+Best Subset selection by BIC.
