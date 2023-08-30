@@ -1,0 +1,155 @@
+# Ridge Regression
+
+# Data Loading
+```{r}
+#library(lasso2)    #changed all Prostate to prostate
+load("Prostate.RData")
+data <- Prostate
+head(data)
+```
+
+# Data Scaling
+# Ridge Solutions are NOT equivariant under scaling of the inputs; 
+# So, one normally standardizes the inputs before implementing the ridge regression
+```{r}
+data2 = data
+for (i in 1:8){
+  data2[,i] = (data2[,i] - mean(data2[,i]))/sqrt(var(data2[,i]))
+}
+head(data2)
+```
+```{r}
+ncol(data)
+```
+
+# Ridge Regression Solution 1 (without any package) Linear Algebra way
+```{r}
+My.Ridge = function(X, y, lambda){
+  beta0 = mean(y, na.rm=TRUE)
+  p = ncol(X)
+  beta.ridge = solve(t(X)%*%X+lambda*diag(p))%*%t(X)%*%y
+  return(c(beta0, beta.ridge))
+}
+
+X = as.matrix(data2[,1:8])
+y = as.vector(data2$lpsa)
+My.Ridge(X, y, lambda=20)
+```
+Is 2.478 b and the rest beta[i]?
+
+# See how solutions change over lambda, the larger lambda the less important features go to 0 faster than the important features(less important are sacrificed).
+```{r}
+X = as.matrix(data2[,1:8])
+y = as.vector(data2$lpsa)
+output = array(0, dim=c(301,8))
+i = 1
+for (lambda in seq(0,300,1)){
+  output[i,] = My.Ridge(X, y, lambda=lambda)[-1]
+  i=i+1
+}
+
+# plot
+require(ggplot2)
+require(reshape2)
+output = data.frame(output)
+colnames(output) = colnames(data2)[1:8]
+output$lambda = seq(0,300,1)
+
+df = matrix(as.matrix(output[,1:8]), ncol=1)
+df = data.frame(df)
+colnames(df) = "value"
+df$covariate = rep(colnames(output)[-9], each=nrow(output) )
+df$lambda = rep(seq(0,300,1), 8)
+
+
+# plot on the same panel
+ggplot(df, aes(lambda,value)) + geom_line(aes(colour = covariate))
+# or plot on different plots
+ggplot(df, aes(lambda,value)) + geom_line() + facet_grid(covariate ~ .)
+```
+
+# Ridge Regression Solution 2 (ridge package)
+```{r}
+library(ridge)
+fit.ridge = linearRidge(lpsa~., data2, lambda = seq(0,20,0.1), scaling="none")
+#coef(fit.ridge)[nrow(coef(fit.ridge)),]
+plot(fit.ridge)
+```
+
+# Ridge Regression Solution 3 (MASS package)
+```{r}
+library(MASS)
+fit.mass = lm.ridge(lpsa ~ ., data2,
+              lambda = seq(0,20,0.1))
+plot(fit.mass,label=TRUE)
+```
+
+# Ridge Regression Solution 4 (glmnet) ----
+```{r}
+library(glmnet)
+X = as.matrix(data2[,1:8])
+y = as.vector(data2$lpsa)
+fit.glmnet = glmnet(X, y, lambda = seq(0,20,0.1), standardize = FALSE, alpha=0)
+plot(fit.glmnet, xvar="lambda")
+```
+
+# Data Processing for Credit.csv data
+```{r}
+data2 = read.csv("Credit.csv", 
+	header=TRUE, stringsAsFactors = FALSE, sep=",", row.names=1)
+head(data2)
+# This data set contains both quantitative and qualitative covaria
+
+# convert "Gender" to 0 and 1
+case = which(data2$Gender==" Male")
+data2$Gender[case] = 1
+data2$Gender[-case] = 0
+
+# convert "Student" to 0 and 1
+case = which(data2$Student=="Yes")
+data2$Student[case] = 1
+data2$Student[-case] = 0
+
+# convert "Married" to 0 and 1
+case = which(data2$Married=="Yes")
+data2$Married[case] = 1
+data2$Married[-case] = 0
+
+# Create two dummy columns, "Ethnicity1", "Ethnicity1"
+# If a person is Caucasian, the Ethnicity1 column is set to 1, and the Ethnicity2 column is set to 0
+# If a person is Asian, the Ethnicity2 column is set to 0, and the Ethnicity1 column is set to 1
+# If a person is African American, the Ethnicity1 column is set to 0, and the Ethnicity2 column is set to 0
+
+data2$Ethnicity1 = 0
+case = which(data2$Ethnicity=="Caucasian")
+data2$Ethnicity1[case] = 1
+
+data2$Ethnicity2 = 0
+case = which(data2$Ethnicity=="Asian")
+data2$Ethnicity2[case] = 1
+
+# Remove the original "Ethnicity" column
+data2 = data2[,-which(colnames(data2)=="Ethnicity")]
+
+
+
+# check for data types for each column (this is always a good practice after some operations have been performed to columns)
+apply(data2, 2, class)
+
+for (i in 1:ncol(data2)){
+  data2[,i] = as.numeric(data2[,i])
+}
+```
+
+# Standardize data2 for ridge/lasso regression
+```{r}
+for (i in 1:ncol(data2)){
+  data2[,i] = (data2[,i] - mean(data2[,i]))/sqrt(var(data2[,i]))
+}
+```
+
+
+
+
+
+
