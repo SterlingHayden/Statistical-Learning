@@ -1,0 +1,174 @@
+#Principal Components Analysis (PCA)
+
+#Load Data
+```{r}
+data(USArrests)
+data = USArrests
+states = row.names(data) # extract the state names
+variable = names(data) # extract the variable names
+head(data)
+```
+
+# Data Standerdization
+```{r}
+for (i in 1:ncol(data)){
+  data[,i]=(data[,i]-mean(data[,i]))/sqrt(var(data[,i]))
+}
+head(data)
+plot(data)
+```
+
+# PCA using prcomp()
+```{r}
+pr.out = prcomp(data, scale=FALSE)
+print(pr.out)
+
+# show the z-matrix:
+pr.out$x[,1:2]
+plot(data.frame(pr.out$x))
+
+# show the first 2 columns of the Z matrix (if q=2)
+pr.out$x[,c(1:2)]
+
+plot(data.frame(pr.out$x[,c(1:2)]))
+
+# biplot:
+biplot(pr.out,scale=0)
+```
+1st frame: of the 4x4 matrix PC1 = column 1 of Phi,..., PC2 = col 2 of phi 2 and so on. We can choose how many columns to take though, in this case 2.
+4th frame: shows how visualize the data in 2d.
+
+
+# PCA 3D visualization
+```{r}
+library(rgl) # package for 3D visualization
+
+plotPCA <- function(x, nGroup, text) {  # user-defined function
+    n <- ncol(x) 
+    if(!(n %in% c(2,3))) { # check if 2d or 3d
+        stop("x must have either 2 or 3 columns")
+    }
+
+    fit <- hclust(dist(x), method="complete") # cluster
+    groups <- cutree(fit, k=nGroup)
+
+    if(n == 3) { # 3d plot
+        plot3d(x, col=groups, type="s", size=1, axes=F)
+        axes3d(edges=c("x--", "y--", "z"), lwd=3, axes.len=2, labels=FALSE)
+        text3d(x,texts=text)
+        grid3d("x")
+        grid3d("y")
+        grid3d("z")
+    } else { # 2d plot
+        maxes <- apply(abs(x), 2, max)
+        rangeX <- c(-maxes[1], maxes[1])
+        rangeY <- c(-maxes[2], maxes[2])
+        plot(x, col=groups, pch=19, xlab=colnames(x)[1], ylab=colnames(x)[2], xlim=rangeX, ylim=rangeY)
+        lines(c(0,0), rangeX*2)
+        lines(rangeY*2, c(0,0))
+    }
+}
+
+plotPCA(pr.out$x[,1:3], 4, text=rownames(data))
+```
+
+#A Simulation Study 1
+```{r}
+set.seed(100)
+x1 = rnorm(50,0,1)
+x2 = rnorm(50,x1,2)
+x3 = rnorm(50,x2,1)
+x4 = rnorm(50,x3,0.5)
+x5 = rnorm(50,x4,1)
+x6 = rnorm(50,0,1)
+x7 = rnorm(50,0,1)
+x8 = rnorm(50,0,1)
+x9 = rnorm(50,0,1)
+x10 = rnorm(50,0,1)
+data = cbind(x1, x2, x3, x4, x5,
+			x6, x7, x8, x9, x10)
+rownames(data) = paste("A",seq(1,50,1),sep="-")
+
+# data standardization
+for (i in 1:ncol(data)){
+  data[,i]=(data[,i]-mean(data[,i]))/sqrt(var(data[,i]))
+}
+
+# PCA using prcomp()
+pr.out = prcomp(data, scale=FALSE)
+biplot(pr.out,scale=0,var.axes = TRUE)
+```
+
+#A Simulation Study 2
+```{r}
+set.seed(100)
+x1 = rnorm(50,0,1)
+x2 = rnorm(50,x1,2)
+x3 = rnorm(50,x2,1)
+x4 = rnorm(50,x3,0.5)
+x5 = rnorm(50,x4,1)
+x6 = rnorm(50,0,1)
+x7 = rnorm(50,0,1)
+x8 = rnorm(50,0,1)
+x9 = rnorm(50,0,1)
+x10 = rnorm(50,0,1)
+data = cbind(x1, x2, x3, x4, x5,
+			x6, x7, x8, x9, x10)
+rownames(data) = paste("A",seq(1,50,1),sep="-")
+
+data[46,] = data[45,]+rnorm(10,0,0.1)
+data[47,] = data[46,]+rnorm(10,0,0.1)
+data[48,] = data[47,]+rnorm(10,0,0.1)
+data[49,] = data[48,]+rnorm(10,0,0.1)
+data[50,] = data[49,]+rnorm(10,0,0.1)
+
+# data standardization
+for (i in 1:ncol(data)){
+  data[,i]=(data[,i]-mean(data[,i]))/sqrt(var(data[,i]))
+}
+
+# PCA using prcomp()
+pr.out = prcomp(data, scale=FALSE)
+biplot(pr.out,scale=0,var.axes = TRUE)
+
+plotPCA(pr.out$x[,1:3], 3, text=rownames(data))
+```
+
+#PVE, proportion of variance explained of the z is 
+```{r}
+data(USArrests)
+data = USArrests
+for (i in 1:ncol(data)){
+  data[,i]=(data[,i]-mean(data[,i]))/sqrt(var(data[,i]))
+}
+pr.out = prcomp(data, scale=FALSE)
+
+PVE = pr.out$sdev^2/sum(pr.out$sdev^2)
+barplot(PVE, names=paste("Z", 1:4, sep=" "))
+```
+
+#PC regression on the Prostate Cancer Data
+```{r}
+load("Prostate.RData")
+data = Prostate
+X = data[,1:8]
+
+# data standardization
+for (i in 1:ncol(X)){
+  X[,i]=(X[,i]-mean(X[,i]))/sqrt(var(X[,i]))
+}
+
+# PCA on "data"
+pr.out = prcomp(X, scale=FALSE)
+pr.out
+```
+
+
+
+
+
+
+
+
+
+
