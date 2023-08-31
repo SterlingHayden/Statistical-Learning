@@ -1,0 +1,83 @@
+# CART
+
+```{r}
+library(rpart)
+```
+
+# Loading data in
+```{r}
+library(ISLR) 
+data("Hitters") # load the Hitters data, which comes from the ISLR package
+head(Hitters)
+Hitters$Salary = log(Hitters$Salary) # perform a log transformation on the salary data to get rid of the long tails
+```
+
+# construct a decision tree
+```{r}
+cart.tree = rpart(Salary~Years+Hits, 
+                  data=Hitters,
+                  method="anova",cp=0.01) # contruct a decision tree
+plot(cart.tree, margin=0.08) #plot a decision tree
+text(cart.tree) #plot a decision tree
+```
+
+# construct a decision tree using more features
+```{r}
+cart.tree = rpart(Salary~Years+Hits+Runs+RBI+Walks+PutOuts+Assists+Errors, 
+                  data=Hitters,  
+                  method="anova",cp=0.001) 
+plot(cart.tree, margin=0.04, uniform = TRUE)
+text(cart.tree)
+```
+
+# cross-validation and pruning
+```{r}
+plotcp(cart.tree) #plot the model performance against cp, which controls the tree complexity
+cart.tree.2 = prune(cart.tree, cp=0.07 ) #prune the previous tree using the cp chosen from the plot above
+plot(cart.tree.2, margin=0.08)
+text(cart.tree.2)
+```
+
+# Tree for sales data
+```{r}
+library(rpart)
+data = read.csv("Advertising.csv", 
+	header=TRUE, stringsAsFactors = FALSE, sep=",", row.names=1)
+head(data)
+
+
+cart.tree = rpart(sales~TV, 
+                  data=data,  
+                  method="anova") #method="class" for a classification tree; method="anova" for a regression tree
+plot(cart.tree, margin=0.04)
+text(cart.tree)
+```
+
+# Classification Tree, messed up by data 
+```{r}
+# Heart data, classification tree
+data = read.csv("heart.csv", 
+			stringsAsFactors = TRUE, 
+			header=TRUE)
+head(data, 2)
+unique(data$ChestPain)
+data$Sex = as.factor(data$sex) # define "sex" column as factors
+
+library(rpart)
+cart.tree = rpart(AHD~., 
+                  data=data,  
+                  method="class", cp=0.001) 
+plot(cart.tree, margin=0.01, uniform=TRUE)
+text(cart.tree)
+
+plotcp(cart.tree)
+cart.tree.2 = prune(cart.tree, cp=0.0071)
+plot(cart.tree.2, uniform = TRUE, margin=0.2)
+text(cart.tree.2)
+```
+
+
+
+
+
+
