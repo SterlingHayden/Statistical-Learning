@@ -1,0 +1,199 @@
+# ANN
+
+Example 1: Heart data
+```{r}
+library(neuralnet)
+# load the data:
+data = read.csv(file="heart.csv",
+                header = TRUE, 
+                stringsAsFactors = FALSE)
+```
+
+# data processing first
+```{r}
+case = which(colnames(data)=="time")
+data = data[,-case]
+
+
+# build a deep forward neural network
+f = as.formula(DEATH_EVENT ~ age + anaemia + creatinine_phosphokinase + diabetes + 
+    ejection_fraction + high_blood_pressure + platelets + serum_creatinine + 
+    serum_sodium + sex + smoking)
+# alternatively, there is a more efficient way to define the formula
+n = names(data)
+f = as.formula(paste("DEATH_EVENT ~", paste(n[!n %in% "DEATH_EVENT"], collapse = " + ")))
+
+# One hidden layer with 5 neurons
+nn.fit = neuralnet(f, data=data, hidden=c(3), linear.output = FALSE)
+plot(nn.fit)
+nn.fit$weights # see the weight
+
+print("----------------------------------------------------------------")
+
+# Two hidden layers with 5 and 3 neurons respectively
+nn.fit <- neuralnet(f, data=data,hidden=c(3,3,3),linear.output = FALSE)
+plot(nn.fit)
+nn.fit$weights # see the weight
+```
+
+
+# ---Example 2: Credit Card Fraud Data
+```{r}
+# load the data:
+data = read.csv("creditcard2.csv",
+                header = TRUE, 
+                stringsAsFactors = FALSE)
+
+# ------------------
+# data processing first
+# ------------------
+# Looks like we do not need the first column --> remove it
+data = data[,-1]
+
+# now, split the data into two parts: one for training and one for testing
+case = sample(c(1:nrow(data)), 2000, replace=FALSE)
+data.train = data[case,]
+data.test = data[-case,]
+```
+
+
+# build the ANN
+```{r}
+# build a deep forward neural network
+n = names(data.train)
+f <- as.formula(paste("Class ~", paste(n[!n %in% "Class"], collapse = " + ")))
+
+nn.fit <- neuralnet(f, data=data.train, hidden=4, linear.output = FALSE)
+plot(nn.fit)
+
+# testing: apply the model to the testing data set
+pred = compute(nn.fit, data.test)$net.result  
+# pred contains the predicted "probabilities" for a transaction to be fraudulent
+# hence, need to convert "probabilities" to "binary output"
+pred1 = array(0, dim=c(length(pred),1))
+case = which(pred > 0.5)
+pred1[case] = 1
+```
+
+# evaluate the performance using "true positive rate (recall, sensitivity)" and "false alarm rate"
+```{r}
+# true positive rate:
+TP.case = which( (pred1 + data.test$Class) == 2 )
+TP = length(TP.case)
+T.case = which( data.test$Class == 1 )
+T.actual = length(T.case)
+TP.rate = TP/T.actual
+
+# false alarm rate
+FP.case = which( (pred1 - data.test$Class) == 1 )
+FP = length(FP.case)
+
+F.case = which( data.test$Class == 0 )
+F.actual = length(F.case)
+
+FP.rate = FP/F.actual
+
+TP.rate
+FP.rate
+```
+
+# parameter tuning example 1
+```{r}
+neuron.n = c(1:10)
+
+TP.rate = FP.rate = array()
+
+for (i in 1:10){
+
+  # build the ANN using neuron.n[i] neurons
+  nn.fit <- neuralnet(f, data=data.train, hidden=neuron.n[i], linear.output = FALSE)
+  
+  # generate the predictions
+  pred = compute(nn.fit, data.test)$net.result  
+  pred1 = array(0, dim=c(length(pred),1))
+  case = which(pred > 0.5)
+  pred1[case] = 1
+
+  # compute the "true positive rate"
+  TP.case = which( (pred1 + data.test$Class) == 2 )
+  TP = length(TP.case)
+  T.case = which( data.test$Class == 1 )
+  T.actual = length(T.case)
+  TP.rate[i] = TP/T.actual
+
+  # compute the "false alarm rate"
+  FP.case = which( (pred1 - data.test$Class) == 1 )
+  FP = length(FP.case)
+  F.case = which( data.test$Class == 0 )
+  F.actual = length(F.case)
+  FP.rate[i] = FP/F.actual
+
+}
+TP.rate
+FP.rate
+
+
+plot(FP.rate, TP.rate, type="p", cex=4)
+which( TP.rate == max(TP.rate) )
+nn.fit <- neuralnet(f, data=data.train, hidden=4, linear.output = FALSE)
+plot(nn.fit)
+```
+
+# parameter tuning example 2
+```{r}
+neuron.n1 = c(1,3,5,7,9)
+neuron.n2 = c(1,3,5,7,9)
+neuron.n = cbind( rep(neuron.n1, each=length(neuron.n2)), rep(neuron.n2, length(neuron.n1)) )
+
+combination = nrow(neuron.n)
+
+TP.rate = FP.rate = array()
+
+for (i in 1:combination){
+  print(i)
+  # build the ANN using neuron.n[i] neurons
+  nn.fit <- neuralnet(f, data=data.train, hidden=neuron.n[i,], linear.output = FALSE)
+  
+  # generate the predictions
+  pred = compute(nn.fit, data.test)$net.result  
+  pred1 = array(0, dim=c(length(pred),1))
+  case = which(pred > 0.5)
+  pred1[case] = 1
+
+  # compute the "true positive rate"
+  TP.case = which( (pred1 + data.test$Class) == 2 )
+  TP = length(TP.case)
+  T.case = which( data.test$Class == 1 )
+  T.actual = length(T.case)
+  TP.rate[i] = TP/T.actual
+
+  # compute the "false alarm rate"
+  FP.case = which( (pred1 - data.test$Class) == 1 )
+  FP = length(FP.case)
+  F.case = which( data.test$Class == 0 )
+  F.actual = length(F.case)
+  FP.rate[i] = FP/F.actual
+
+}
+par(mfrow=c(2,1))
+par(mar=c(1,2,1,1))
+plot(TP.rate,type="o")
+plot(FP.rate,type="o")
+abline(h=0.02)
+
+plot(TP.rate, FP.rate)
+
+
+
+plot(FP.rate, TP.rate, type="p", cex=3)
+
+opt.case = which(TP.rate == max(TP.rate))
+neuron.n[opt.case,]
+
+
+nn.fit <- neuralnet(f, data=data.train, hidden=c(7,3), linear.output = FALSE)
+plot(nn.fit)
+```
+
+
+
