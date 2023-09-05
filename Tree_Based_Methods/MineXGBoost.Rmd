@@ -1,0 +1,142 @@
+# XGBoost
+
+```{r}
+#install.packages("xgboost")
+library(xgboost)
+```
+
+# RUNNING XGBoost on the spam data
+```{r}
+load("spam.RData")
+data <- spam
+head(data)
+head(spam)
+class(spam[,58])
+
+setting = list(max_depth = 4, eta = 0.02, nthread = 8) 
+#Here, max_depth: tree complexity, eta: learning rate, nthread: number of processors
+fit.boost.1 = xgboost(data = as.matrix(spam[,c(1:57)]), 
+                      label = spam[,58],
+                      nrounds = 500,
+                      params = setting)  # nrounds: number of trees
+plot(fit.boost.1$evaluation_log, type="l")
+```
+
+# RUNNING XGBoost on California housing data
+```{r}
+data = read.csv("housing.csv", stringsAsFactors=FALSE, header=TRUE)
+data = data[,c(1:9)] 
+
+setting <- list(max_depth = 6, eta = 0.02, nthread = 8) 
+#Here, max_depth: tree complexity, eta: learning rate, nthread: number of processors
+fit.boost.1 = xgboost(data = as.matrix(data[,c(1:8)]), 
+                      label = data[,9],
+                      nrounds = 2000,
+                      params = setting)  # nrounds: number of trees
+plot(fit.boost.1$evaluation_log, type="l")
+```
+
+# Implementation of boosting trees "data3.RData"
+# comparison between boosting and RF
+```{r}
+# load the air quality data;
+load("data3.RData")# Suppose that we only use "T","w_x", and "w_y" for the prediction; 
+data = data3
+data = data[, c("o3","T","w_x","w_y")]
+
+# To keep the computing simple, we sample 1000 data points
+set.seed(10)
+case.select = sample(1:nrow(data),1000)
+data = data[case.select,]
+
+# now, we select 750 data points for training, and use 250 data points for testing
+set.seed(10)
+case.select = sample(1:1000,750)
+data.train = data[case.select,]
+data.test = data[-case.select,]
+obs = data.test$o3 # get the actual observed o3 concentration in the testing data set
+
+
+# remove NA values in the training data set
+case.na = which(is.na(rowSums(data.train)))
+data.train = data.train[-case.na,]
+
+# create an empty list to store the output
+output.list = list()
+```
+
+# running the xgboost algorithm 1
+```{r}
+setting <- list(max_depth = 2, eta = 0.2, nthread = 8) 
+#Here, max_depth: tree complexity, eta: learning rate, nthread: number of processors
+fit.boost.1 = xgboost(data = as.matrix(data.train[,c("T","w_x","w_y")]), 
+                    label = data.train$o3,
+                    nrounds = 89,
+                    params = setting)  # nrounds: number of trees
+plot(fit.boost.1$evaluation_log, type="l") # plot the rmse against the number of trees
+
+pred = predict(fit.boost.1, as.matrix(data.test[,c("T","w_x","w_y")]))
+output = data.frame(cbind(pred, obs))
+output$model = "boost (eta=0.2, ntree=89)"
+output.list[[1]] = output
+```
+
+# running the xgboost algorithm 2
+```{r}
+setting <- list(max_depth = 2, eta = 0.02, nthread = 8)
+fit.boost.2 = xgboost(data = as.matrix(data.train[,c("T","w_x","w_y")]), 
+                      label = data.train$o3,
+                      nrounds = 500,
+                      params = setting)
+plot(fit.boost.2$evaluation_log, type="l") # plot the rmse against the number of trees
+pred <- predict(fit.boost.2, as.matrix(data.test[,c("T","w_x","w_y")]))
+output = data.frame(cbind(pred, obs))
+output$model = "boost (eta=0.02, ntree=500)"
+output.list[[2]] = output
+```
+
+# running the xgboost algorithm 3
+```{r}
+setting <- list(max_depth = 2, eta = 0.001, nthread = 8)
+fit.boost.3 = xgboost(data = as.matrix(data.train[,c("T","w_x","w_y")]), 
+                      label = data.train$o3,
+                      nrounds = 500,
+                      params = setting)
+plot(fit.boost.3$evaluation_log, type="l") # plot the rmse against the number of trees
+pred <- predict(fit.boost.3, as.matrix(data.test[,c("T","w_x","w_y")]))
+output = data.frame(cbind(pred, obs))
+output$model = "boost (eta=0.001, ntree=500)"
+output.list[[3]] = output
+```
+
+# running the RF algorithm
+```{r}
+library(randomForest)
+fit.rf = randomForest(o3~., data.train, ntree=500, do.trace=100)
+pred <- predict(fit.rf, data.test)
+output = data.frame(cbind(pred, obs))
+output$model = "rf"
+output.list[[4]] = output
+```
+
+# running the xgboost algorithm 4
+```{r}
+setting <- list(max_depth = 2, eta = 0.06, nthread = 8)
+fit.boost.4 = xgboost(data = as.matrix(data.train[,c("T","w_x","w_y")]), 
+                      label = data.train$o3,
+                      nrounds = 89,
+                      params = setting)
+plot(fit.boost.4$evaluation_log, type="l") # plot the rmse against the number of trees
+pred <- predict(fit.boost.4, as.matrix(data.test[,c("T","w_x","w_y")]))
+output = data.frame(cbind(pred, obs))
+output$model = "boost (eta=0.06, ntree=89)"
+output.list[[5]] = output
+```
+
+# Comparison:
+```{r}
+library(openair)
+output.data = do.call(rbind, output.list) # combine all data.frames from a list to form a big data frame
+modStats(output.data, obs = "obs", mod = "pred", type = "model")
+TaylorDiagram(output.data, obs = "obs", mod = "pred", group = "model",pch=20,cex=2)
+```
