@@ -1,0 +1,182 @@
+
+```{r}
+library(pixmap)
+library(MASS)
+```
+
+
+```{r}
+# Have to change directories for easy loading, don't know if there is a work around
+wd = "train/"
+setwd(wd)
+
+# obtain the file names in a folder
+f.names = list.files(path = ".", pattern = ".pgm")
+# obtain the number of image files.
+n.file = length(f.names)
+test = read.pnm(f.names[4])
+test@grey
+# you may read an image and plot it
+plot(read.pnm(f.names[1]))
+```
+
+
+
+```{r}
+setwd(wd)
+
+n = 192*168 # this is the total number of pixels of an image
+
+# load images; each image is a row vector
+data = array(0/0, dim=c(n.file, n))
+for (i in 1:n.file){
+  tmp = read.pnm(f.names[i])
+  tmp = as.vector(tmp@grey)
+  data[i,] =  tmp 
+}
+data.train = data
+```
+
+
+
+```{r}
+setwd(wd)
+
+# Obtain the "average" face:
+average = colMeans(data)
+average.mat = matrix(average, nrow=192) # convert the vector back to a matrix
+average.face = read.pnm(f.names[1]) # load a template image 
+average.face@grey = average.mat # replace the data by average.m
+plot(average.face) # this is the average look computed from the 36 images
+```
+
+
+
+```{r}
+setwd(wd)
+
+# Here, each face is defined by 192*168 features
+# Next, we perform PCA to reduce the dimension from 192*168 to a very small number
+
+# Step 1: we need to remove the mean before PCA
+for (i in 1:n){
+  data[,i] = (data[,i] - mean(data[,i]))
+}
+
+# Step 2: PCA
+K = 20 # we try to use only 20 features to capture the facial characteristics
+pr.out = prcomp(data, scale=FALSE)
+Z.matrix = pr.out$x[,1:K]
+Phi.matrix = pr.out$rotation[,1:K]
+
+# if K = 2, we could easily plot the data
+if (K==2){
+  plot(pr.out$x[,1:K]) 
+  text(pr.out$x[,1:K], labels=1:n.file, col="red")
+  
+  # looks like individual 13 and individual 34 are different
+  par(mfrow=c(1,2))
+  plot(read.pnm(f.names[13]))
+  plot(read.pnm(f.names[34]))
+  
+  # looks like individual 33 and individual 25 look like each other 
+  par(mfrow=c(1,2))
+  plot(read.pnm(f.names[25]))
+  plot(read.pnm(f.names[33]))
+}
+
+# if K > 2,
+if (K>2){
+  
+  # compute the distance from individual 25 to others
+  j = 25
+  distance = array()
+  for (i in 1:n.file){
+    distance[i] = sqrt( sum( (Z.matrix[j,] - Z.matrix[i,])^2 ) )
+  }
+  
+  # find the person who looks like individual 25
+  case = which( rank(distance)<= 2 )
+  par(mfrow=c(1,2))
+  for (i in 1:2){
+    plot(read.pnm(f.names[case[i]]))
+  }
+  
+  # find the person who doesn't look like individual 25
+  case = which( rank(distance) == n.file )
+  par(mfrow=c(1,2))
+  plot(read.pnm(f.names[25]))
+  plot(read.pnm(f.names[case]))
+}
+```
+
+
+
+```{r}
+# Next, we will load more pictures, and find two persons that look like each other
+# -----------------------------------
+wd.test = "test/"
+setwd(wd.test)
+
+# obtain the file names in a folder
+f.names.test = list.files(path = ".", pattern = ".pgm")
+# obtain the number of image files.
+n.file.test = length(f.names.test)
+# you may read an image and plot it
+plot(read.pnm(f.names.test[2]))
+```
+
+
+
+```{r}
+setwd(wd.test)
+
+# load images; each image is a row vector
+data.test = array(0/0, dim=c(n.file.test, n))
+for (i in 1:n.file.test){
+  tmp = read.pnm(f.names.test[i])
+  tmp = as.vector(tmp@grey)
+  data.test[i,] =  tmp 
+}
+```
+
+
+
+```{r, warning=FALSE}
+setwd(wd.test)
+
+# Step 1: we need to remove the mean before PCA
+for (i in 1:n){
+  data.test[,i] = (data.test[,i] - mean(data.train[,i]))
+}
+
+# Step 2: reduce the dimension
+Z.matrix.test = data.test %*% Phi.matrix
+
+# Step 3: find two persons who look similar
+# Compute the pair-wise distances between two persons
+distance = array(0, dim=c(n.file.test, n.file.test))
+for (i in 1:n.file.test){
+  for (j in 1:n.file.test){
+    distance[i,j] = sqrt(  sum( (Z.matrix.test[i,]-Z.matrix.test[j,])^2) )
+  }
+}
+print(distance)
+
+# images 2 and 3 are similar
+par(mfrow=c(1,2))
+plot(read.pnm(f.names.test[2]))
+plot(read.pnm(f.names.test[3]))
+
+# images 4, 5 and 6 are similar
+par(mfrow=c(2,2))
+plot(read.pnm(f.names.test[4]))
+plot(read.pnm(f.names.test[5]))
+plot(read.pnm(f.names.test[6]))
+
+# image 1 is not similar to any one
+print('--------------------------------------------')
+rowMeans(distance)
+plot(read.pnm(f.names.test[1]))
+```
+
