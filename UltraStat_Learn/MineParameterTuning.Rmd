@@ -1,0 +1,261 @@
+# Parameter Tuning
+
+```{r}
+#install.packages("xgboost")
+library(xgboost)
+```
+
+# Load Data and Data Processing
+```{r}
+load("data3.RData")
+data = data3
+# Suppose that we only use "T","w_x", and "w_y" for the prediction; 
+data = data[, c("o3","T","w_x","w_y")]
+# To keep the computing simple, we sample 1000 data points
+set.seed(10)
+case.select = sample(1:nrow(data),1000)
+data = data[case.select,]
+# now, we select 750 data points for training, and use 250 data points for testing
+set.seed(10)
+case.select = sample(1:1000,750)
+data.train = data[case.select,]
+data.test = data[-case.select,]
+obs = data.test$o3 # get the actual observed o3 concentration in the testing data set
+# remove NA values in the training data set
+case.na = which(is.na(rowSums(data.train)))
+data.train = data.train[-case.na,]
+# create an empty list to store the output
+output.list = list()
+```
+
+# Approach 1: Grid Search, takes a bunch of time as every combo is tested
+```{r}
+d = 4
+B.range = seq(5,300,20)
+lambda.range = seq(0.001,0.1,0.002)
+# plot the mesh grid, if you'd like to see how it looks:
+plot( rep(B.range, each=length(lambda.range)),  
+	rep(lambda.range, length(B.range)),
+	xlab = "B",ylab="lambda",pch=20)
+
+
+rmse = array(0/0, dim=c(length(B.range), length(lambda.range))) # an array that contains the model performance
+for (i in 1:length(B.range)){
+	B = B.range[i]
+  for (j in 1:length(lambda.range)){
+ 	lambda = lambda.range[j]	
+
+	setting <- list(max_depth = d, eta = lambda, nthread = 8) 
+	#Here, max_depth: tree complexity, eta: learning rate, nthread: number of processors
+	fit.boost = xgboost(data = as.matrix(data.train[,c("T","w_x","w_y")]), 
+                    label = data.train$o3,
+                    nrounds = B,
+                    params = setting, verbose=0)  # nrounds: number of trees
+
+	pred <- predict(fit.boost, as.matrix(data.test[,c("T","w_x","w_y")]))
+	output = sqrt( mean((pred-obs)^2, na.rm=TRUE) )
+	rmse[i,j]= output
+  }
+  print(i)	
+}
+save.image("rmse.RData")
+load("rmse.RData")
+
+# you may see the rmse for different choice of B and lambda
+table = cbind(rep(B.range, each=length(lambda.range)), 
+			rep(lambda.range, length(B.range)), as.vector(rmse))
+table = data.frame(table)
+colnames(table) = c("B","lambda","rmse")
+print(table)
+# you could ask R to rank the rows based on rmse (from the smallest to the largest)
+table = table[order(table$rmse),]
+# now, take a look at the first 10 choices:
+head(table, 10)
+
+# since the design space is two-dimensional mesh, you may see the entire response surface
+library(plot3D)
+persp3D (x = B.range, 
+       y = lambda.range,
+	 z = rmse,xlab="B",ylab="lambda",zlab="rmse",
+	 phi = 40, theta = 40) # by changing the values of phi and theta, you could adjust the perspective of the 3d plot
+
+
+# Based on the results above, let's refine our search grid, and do another search
+d = 4
+B.range = seq(80,90,1)
+lambda.range = seq(0.055,0.065,0.001)
+# plot the mesh grid, if you'd like to see how it looks:
+plot( rep(B.range, each=length(lambda.range)),  
+	rep(lambda.range, length(B.range)),
+	xlab = "B",ylab="lambda",pch=20)
+
+
+rmse = array(0/0, dim=c(length(B.range), length(lambda.range))) # an array that contains the model performance
+for (i in 1:length(B.range)){
+	B = B.range[i]
+  for (j in 1:length(lambda.range)){
+ 	lambda = lambda.range[j]	
+
+	setting <- list(max_depth = d, eta = lambda, nthread = 8) 
+	#Here, max_depth: tree complexity, eta: learning rate, nthread: number of processors
+	fit.boost = xgboost(data = as.matrix(data.train[,c("T","w_x","w_y")]), 
+                    label = data.train$o3,
+                    nrounds = B,
+                    params = setting, verbose=0)  # nrounds: number of trees
+
+	pred <- predict(fit.boost, as.matrix(data.test[,c("T","w_x","w_y")]))
+	output = sqrt( mean((pred-obs)^2, na.rm=TRUE) )
+	rmse[i,j]= output
+  }
+  print(i)	
+}
+
+# you may see the rmse for different choice of B and lambda
+table = cbind(rep(B.range, each=length(lambda.range)), 
+			rep(lambda.range, length(B.range)), as.vector(rmse))
+table = data.frame(table)
+colnames(table) = c("B","lambda","rmse")
+print(table)
+# you could ask R to rank the rows based on rmse (from the smallest to the largest)
+table = table[order(table$rmse),]
+# now, take a look at the first 10 choices:
+head(table, 10)
+```
+
+# Approach 2: One factor at a time, fastest but least optimal
+```{r}
+d = 4
+B.range = seq(5,300,20)
+lambda.range = seq(0.001,0.1,0.002)
+
+
+
+# Step 1: search for the optmal B
+rmse = array(0/0, dim=c(length(B.range), 1)) # an array that contains the model performance
+lambda = 0.2
+for (i in 1:length(B.range)){
+	B = B.range[i]
+	setting <- list(max_depth = d, eta = lambda, nthread = 8) 
+	#Here, max_depth: tree complexity, eta: learning rate, nthread: number of processors
+	fit.boost = xgboost(data = as.matrix(data.train[,c("T","w_x","w_y")]), 
+                    label = data.train$o3,
+                    nrounds = B,
+                    params = setting, verbose=0)  # nrounds: number of trees
+
+	pred <- predict(fit.boost, as.matrix(data.test[,c("T","w_x","w_y")]))
+	output = sqrt( mean((pred-obs)^2, na.rm=TRUE) )
+	rmse[i]= output
+  print(i)	
+}
+# find the optimal B
+plot(B.range, rmse)
+case = which(rmse == min(rmse))
+B.opt = B.range[case]
+print(B.opt)
+
+# Step 2: search for the optmal lambda
+rmse = array(0/0, dim=c(length(lambda.range), 1)) # an array that contains the model performance
+B = B.opt
+for (i in 1:length(lambda.range)){
+	lambda = lambda.range[i]
+	setting <- list(max_depth = d, eta = lambda, nthread = 8) 
+	#Here, max_depth: tree complexity, eta: learning rate, nthread: number of processors
+	fit.boost = xgboost(data = as.matrix(data.train[,c("T","w_x","w_y")]), 
+                    label = data.train$o3,
+                    nrounds = B,
+                    params = setting, verbose=0)  # nrounds: number of trees
+
+	pred <- predict(fit.boost, as.matrix(data.test[,c("T","w_x","w_y")]))
+	output = sqrt( mean((pred-obs)^2, na.rm=TRUE) )
+	rmse[i]= output
+  print(i)	
+}
+# find the optimal lambda
+plot(lambda.range, rmse)
+case = which(rmse == min(rmse))
+lambda.opt = lambda.range[case]
+print(lambda.opt)
+```
+
+# Approach 3: Space-Filling Design, the inbetween method
+```{r}
+d = 4
+B.range = seq(5,300,20)
+lambda.range = seq(0.001,0.1,0.002)
+
+# generate a space-filling design with 30 points
+library(MaxPro)
+Design = MaxProLHD(n = 30, p = 2)$Design # n: number of points, p: number of factors
+Design2 = MaxPro(Design)$Design
+plot(Design2[,c(1,2)], xlab="B", ylab="l")
+
+B.points = (max(B.range)-min(B.range))*Design2[,1]+min(B.range)
+B.points = round(B.points)
+lambda.points = (max(lambda.range)-min(lambda.range))*Design2[,2]+min(lambda.range)
+lambda.points = round(lambda.points, 3)
+
+
+# take a look at the selected points:
+# plot the mesh grid, if you'd like to see how it looks:
+plot( rep(B.range, each=length(lambda.range)),  
+	rep(lambda.range, length(B.range)),
+	xlab = "B",ylab="lambda",pch=20)
+points(B.points, lambda.points, col="red",cex=2)
+
+
+# evaluate the rmse
+rmse = array(0/0, dim=c(length(B.points), 1)) # an array that contains the model performance
+for (i in 1:length(B.points)){
+	B = B.points[i]
+  	lambda = lambda.points[i]	
+
+	setting <- list(max_depth = d, eta = lambda, nthread = 8) 
+	#Here, max_depth: tree complexity, eta: learning rate, nthread: number of processors
+	fit.boost = xgboost(data = as.matrix(data.train[,c("T","w_x","w_y")]), 
+                    label = data.train$o3,
+                    nrounds = B,
+                    params = setting, verbose=0)  # nrounds: number of trees
+
+	pred <- predict(fit.boost, as.matrix(data.test[,c("T","w_x","w_y")]))
+	output = sqrt( mean((pred-obs)^2, na.rm=TRUE) )
+	rmse[i]= output
+  print(i)	
+}
+
+# you may see the rmse for different choice of B and lambda
+table = cbind(B.points, lambda.points, rmse)
+table = data.frame(table)
+colnames(table) = c("B","lambda","rmse")
+print(table)
+
+# you could ask R to rank the rows based on rmse (from the smallest to the largest)
+table = table[order(table$rmse),]
+# now, take a look at the first 10 choices:
+head(table, 10)
+
+# since the design space is two-dimensional mesh, you may see the entire response surface
+library(rgl)
+plot3d(as.matrix(table), col="red", type="s", size=1, axes=T)
+
+
+# option 2: a surface is fit to rmse
+
+loess.fit <- loess(rmse ~ B + lambda, table, span=0.5) #loess: Scatter-diagram smoothing
+summary(loess.fit )
+grid.mar <- list(B.range=B.range, lambda.range=lambda.range)
+grid.mesh = expand.grid(grid.mar)
+colnames(grid.mesh) = c("B","lambda")
+# get the fitted (interpolated) values
+rmse.interp <- predict(loess.fit , grid.mesh)
+rmse.interp <- matrix(rmse.interp, length(B.range), length(lambda.range))
+# plot the interpolated values as shaded rectangles and contours
+library(latticeExtra)
+library(RColorBrewer)
+nclr <- 8
+plotclr <- brewer.pal(nclr, "PuOr")
+plotclr <- plotclr[nclr:1] # reorder colors
+#plot(orotl.shp)
+image(B.range,lambda.range, rmse.interp, col=plotclr)
+contour(B.range,lambda.range,  rmse.interp, add=TRUE, nlevels = 50, col="white")
+points(B.points, lambda.points, col="yellow")
+```
