@@ -12,3 +12,6 @@ In the "Neural Networks" section, we cover principle component analysis (PCA) an
 
 ## Tree-Based Methods
 The "Tree-Based Methods" section is dedicated to different decision tree methods and how to construct and prune them effectively. Decision trees are powerful tools for both classification and regression tasks. Explore this section to learn about popular algorithms like CART, Random Forests, and XGBoost.
+
+## UltraStat_Learn
+The "UltraStat_Learn" combines the learnings from Neural Networks & Tree-Based Methods with paramater tuning.
